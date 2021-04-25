@@ -1,0 +1,11 @@
+.DS_Store
+.idea/
+config/
+data/
+vendor/
+*.db
+*.code-workspace
+*.csv
+*.log
+*.json
+*.toml
