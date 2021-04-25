@@ -5,7 +5,6 @@ const gitignore = `.DS_Store
 data/
 log/
 vendor/
-go.sum
 *.code-workspace
 *.csv
 *.db
