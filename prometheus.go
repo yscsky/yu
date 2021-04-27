@@ -19,13 +19,13 @@ var (
 )
 
 // InitPrometheus 初始化Prometheus
-func InitPrometheus(name string) {
+func InitPrometheus(space, name string) {
 	if strings.Contains(name, "-") {
 		name = strings.ReplaceAll(name, "-", "_")
 	}
 	RequestCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "SHORT",
+			Namespace: space,
 			Subsystem: name,
 			Name:      "RequestCounter",
 			Help:      "Requests Count",
@@ -35,7 +35,7 @@ func InitPrometheus(name string) {
 
 	LatencyHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Namespace: "SHORT",
+			Namespace: space,
 			Subsystem: name,
 			Name:      "Latency",
 			Help:      "Requests Latency Histogram",
@@ -46,7 +46,7 @@ func InitPrometheus(name string) {
 
 	DurationsSummary = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Namespace:  "SHORT",
+			Namespace:  space,
 			Subsystem:  name,
 			Name:       "LatencySummary",
 			Help:       "Requests Latency Summary",
@@ -59,19 +59,6 @@ func InitPrometheus(name string) {
 	prometheus.MustRegister(DurationsSummary)
 }
 
-// PromMetrics prometheus metrics 中间件
-func PromMetrics() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		defer func(start time.Time) {
-			d := float64(time.Since(start).Nanoseconds())
-			LatencyHistogram.WithLabelValues(c.Request.URL.Path).Observe(d)
-			DurationsSummary.WithLabelValues(c.Request.URL.Path).Observe(d)
-			RequestCounter.WithLabelValues(c.Request.URL.Path).Add(1)
-		}(time.Now())
-		c.Next()
-	}
-}
-
 // PromethousHandler 启动promethous http监听
 func PromethousHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -79,14 +66,32 @@ func PromethousHandler() gin.HandlerFunc {
 	}
 }
 
-// PrometheusInterceptor promethous grpc中间件
-func PrometheusInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler) (resp interface{}, err error) {
-	defer func(start time.Time) {
+// PromeMetrics prometheus metrics 中间件
+func PromeMetrics() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer PromeTrace(c.Request.URL.Path)()
+		c.Next()
+	}
+}
+
+// PromeUnaryInterceptor promethous grpc中间件
+func PromeUnaryInterceptor() grpc.ServerOption {
+	return grpc.UnaryInterceptor(
+		func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+			handler grpc.UnaryHandler) (resp interface{}, err error) {
+			defer PromeTrace(info.FullMethod)()
+			return handler(ctx, req)
+		},
+	)
+}
+
+// PromeTrace promethous数据记录
+func PromeTrace(label string) func() {
+	start := time.Now()
+	return func() {
 		d := float64(time.Since(start).Nanoseconds())
-		LatencyHistogram.WithLabelValues(info.FullMethod).Observe(d)
-		DurationsSummary.WithLabelValues(info.FullMethod).Observe(d)
-		RequestCounter.WithLabelValues(info.FullMethod).Add(1)
-	}(time.Now())
-	return handler(ctx, req)
+		LatencyHistogram.WithLabelValues(label).Observe(d)
+		DurationsSummary.WithLabelValues(label).Observe(d)
+		RequestCounter.WithLabelValues(label).Add(1)
+	}
 }

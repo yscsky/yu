@@ -60,7 +60,7 @@ func (s *GinServer) Health() {
 
 // Promethous 启动Promethous监听
 func (s *GinServer) Promethous(name, pass string) {
-	InitPrometheus(s.Name)
+	InitPrometheus("YU", s.Name)
 	s.Engine.GET("metrics", BasicAuth(name, pass), PromethousHandler())
 }
 

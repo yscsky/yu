@@ -11,7 +11,7 @@ func main() {
 	// 设置健康检查
 	gs.Health()
 	gs.Promethous("admin", "admin")
-	group := gs.Group("api", yu.NoCache(), yu.PromMetrics(), yu.LogControl(true, []string{}))
+	group := gs.Group("api", yu.NoCache(), yu.PromeMetrics(), yu.LogControl(true, []string{}))
 	group.GET("getjson", getJson)
 	group.GET("getjsonauth", yu.BasicAuth("admin", "123456"), getJsonAuth)
 	group.POST("postjson", postJson)
