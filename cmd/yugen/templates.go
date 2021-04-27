@@ -40,7 +40,6 @@ import (
 	"{{.Mod}}/internal/db"
 	ml "{{.Mod}}/internal/model"
 	"github.com/yscsky/yu"
-	"google.golang.org/grpc"
 )
 
 var (
@@ -77,11 +76,11 @@ func (a *App) OnStart() bool {
 	ginSvr = yu.NewGinServer(a.Name(), cfg.HttpPort, cfg.GinMod)
 	ginSvr.Health()
 	ginSvr.Promethous("admin", "admin")
-	// group := ginSvr.Group("", yu.NoCache(), yu.PromMetrics(), yu.LogControl(cfg.Trace, []string{}))
+	// group := ginSvr.Group("", yu.NoCache(), yu.PromeMetrics(), yu.LogControl(cfg.Trace, []string{}))
 
 	// 设置grpc server
 	grpcSvr = yu.NewGrpcServer(a.Name(), cfg.GrpcPort, func(gs *yu.GrpcServer) {
-	}, grpc.UnaryInterceptor(yu.PrometheusInterceptor))
+	}, yu.PromeUnaryInterceptor())
 	return true
 }
 
@@ -123,8 +122,8 @@ var tables = []string{}
 const configgo = `package ml
 
 import (
-	"github.com/yscsky/yu"
 	"github.com/gin-gonic/gin"
+	"github.com/yscsky/yu"
 	"gorm.io/gorm/logger"
 )
 
