@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"flag"
 	"sync"
 	"time"
 
@@ -23,9 +23,18 @@ type arg3 struct {
 }
 
 func main() {
-	normalUsage()
-	timeoutUsage()
-	stopUsage()
+	opt := flag.String("opt", "", "operate usage")
+	flag.Parse()
+	switch *opt {
+	case "normal":
+		normalUsage()
+	case "stop1":
+		stopUsage1()
+	case "stop2":
+		stopUsage2()
+	default:
+		yu.Warnf("opt should be normal, stop1, stop2")
+	}
 }
 
 func normalUsage() {
@@ -48,27 +57,39 @@ func normalUsage() {
 func deal(args interface{}) {
 	switch a := args.(type) {
 	case *arg1:
-		log.Println("[info] - arg1 idx:", a.idx)
+		yu.Logf("arg1 idx: %d", a.idx)
 		a.w.Done()
 	case *arg2:
-		log.Println("[info] - arg2 idx:", a.idx)
+		yu.Logf("arg2 idx: %d", a.idx)
 		a.w.Done()
 	default:
-		log.Println("[err] - deal args type is unknown")
+		yu.Errf("deal args type is unknown")
 	}
 }
 
-func timeoutUsage() {
-	q := yu.NewQueueWithTimeout(10, 10, deal2, dealOut, 2*time.Second)
-	q.Start()
-	for i := 0; i < 100; i++ {
-		if i > 90 {
-			q.Stop()
-			break
+func stopUsage1() {
+	qm := yu.NewQueueManager()
+	qm.AddQueue(yu.NewQueue(1024, 10, deal2))
+	qm.StartQueue()
+	yu.Logf("start")
+	time.Sleep(10 * time.Millisecond)
+	qm.StopQueue()
+	yu.Logf("stop")
+}
+
+func stopUsage2() {
+	qm := yu.NewQueueManager()
+	qm.AddQueue(yu.NewQueue(1024, 10, deal2))
+	qm.StartQueue()
+	yu.Logf("start")
+	go func() {
+		for i := 0; i < 1000000; i++ {
+			qm.PushQueue(0, arg3{idx: i}, false)
 		}
-		q.SubmitSync(arg3{idx: i})
-	}
-	time.Sleep(10 * time.Second)
+	}()
+	time.Sleep(10 * time.Millisecond)
+	qm.StopQueue()
+	yu.Logf("stop")
 }
 
 func deal2(args interface{}) {
@@ -77,38 +98,5 @@ func deal2(args interface{}) {
 		yu.Errf("args is not arg3")
 		return
 	}
-	yu.Logf("idx: %d", a.idx)
-	time.Sleep(3 * time.Second)
-}
-
-func dealOut(args interface{}) {
-	a, ok := args.(arg3)
-	if !ok {
-		yu.Errf("args is not arg3")
-		return
-	}
-	yu.Warnf("idx: %d timeout", a.idx)
-}
-
-func stopUsage() {
-	queue := yu.NewQueue(10, 10, dealStop)
-	queue.Start()
-	go func() {
-		for i := 0; i < 100; i++ {
-			queue.SubmitSync(arg3{idx: i})
-		}
-	}()
-	time.Sleep(1 * time.Millisecond)
-	queue.Stop()
-	yu.Logf("stop")
-}
-
-func dealStop(args interface{}) {
-	a, ok := args.(arg3)
-	if !ok {
-		yu.Errf("args is not arg3")
-		return
-	}
-	time.Sleep(3 * time.Second)
-	yu.Logf("dealStop idx: %d", a.idx)
+	yu.Logf("arg3 idx: %d", a.idx)
 }

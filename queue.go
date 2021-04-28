@@ -2,51 +2,29 @@ package yu
 
 import (
 	"sync"
-	"time"
 )
 
 type dealFunc func(interface{})
 
 // Queue 队列
 type Queue struct {
-	num     int
-	deal    dealFunc
-	out     time.Duration
-	dealOut dealFunc
-	que     chan interface{}
-	wg      *sync.WaitGroup
-	stop    bool
-	stch    chan struct{}
+	num  int
+	deal dealFunc
+	que  chan interface{}
+	wg   *sync.WaitGroup
+	stop bool
+	stch chan struct{}
 }
 
 // NewQueue 新建队列
 func NewQueue(size, num int, deal dealFunc) *Queue {
 	return &Queue{
-		num:     num,
-		deal:    deal,
-		out:     0,
-		dealOut: nil,
-		que:     make(chan interface{}, size),
-		wg:      new(sync.WaitGroup),
-		stop:    false,
-		stch:    make(chan struct{}),
-	}
-}
-
-// NewQueue 新建带提交超时的队列
-func NewQueueWithTimeout(size, num int, deal, dealOut dealFunc, out time.Duration) *Queue {
-	if out == 0 || dealOut == nil {
-		panic("NewQueueWithTimeout must set out and outDeal")
-	}
-	return &Queue{
-		num:     num,
-		deal:    deal,
-		out:     out,
-		dealOut: dealOut,
-		que:     make(chan interface{}, size),
-		wg:      new(sync.WaitGroup),
-		stop:    false,
-		stch:    make(chan struct{}),
+		num:  num,
+		deal: deal,
+		que:  make(chan interface{}, size),
+		wg:   new(sync.WaitGroup),
+		stop: false,
+		stch: make(chan struct{}),
 	}
 }
 
@@ -65,7 +43,7 @@ func (q *Queue) Start() {
 
 // Stop 停止队列
 func (q *Queue) Stop() {
-	q.stch <- struct{}{}
+	q.tryStop()
 	close(q.que)
 	q.wg.Wait()
 }
@@ -80,25 +58,6 @@ func (q *Queue) SubmitSync(item interface{}) {
 	q.submit(item)
 }
 
-func (q *Queue) submit(item interface{}) {
-	if q.isStop() {
-		return
-	}
-	if q.out <= 0 {
-		q.que <- item
-		return
-	}
-	t := time.NewTimer(q.out)
-	defer t.Stop()
-	select {
-	case q.que <- item:
-	case <-t.C:
-		if q.dealOut != nil {
-			q.dealOut(item)
-		}
-	}
-}
-
 func (q *Queue) isStop() bool {
 	select {
 	case <-q.stch:
@@ -106,6 +65,21 @@ func (q *Queue) isStop() bool {
 	default:
 	}
 	return q.stop
+}
+
+func (q *Queue) submit(i interface{}) {
+	if q.isStop() {
+		return
+	}
+	q.que <- i
+}
+
+func (q *Queue) tryStop() {
+	select {
+	case <-q.que:
+		q.stch <- struct{}{}
+	default:
+	}
 }
 
 // QueueManager 队列管理器
@@ -132,8 +106,12 @@ func (qm *QueueManager) GetQueue(i int) *Queue {
 }
 
 // PushQueue 添加任务到管理器队列中
-func (qm *QueueManager) PushQueue(i int, args interface{}) {
-	qm.ques[i].submit(args)
+func (qm *QueueManager) PushQueue(i int, args interface{}, async bool) {
+	if async {
+		qm.ques[i].SubmitAsync(args)
+		return
+	}
+	qm.ques[i].SubmitSync(args)
 }
 
 // StartQueue 管理器启动所有队列
