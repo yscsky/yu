@@ -86,3 +86,13 @@ func (a *App) OnStop() {
 	}
 	a.Stop()
 }
+
+// NewApp 创建内置App
+func NewApp(name string, start func() bool, stop func(), svrs ...ServerInterface) *App {
+	return &App{
+		Na:    name,
+		Start: start,
+		Stop:  stop,
+		Svrs:  svrs,
+	}
+}

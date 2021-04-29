@@ -3,6 +3,7 @@ module github.com/yscsky/yu
 go 1.16
 
 require (
+	github.com/eclipse/paho.mqtt.golang v1.3.3
 	github.com/gin-gonic/gin v1.7.1
 	github.com/go-redis/redis/v8 v8.8.2
 	github.com/golang/protobuf v1.4.3

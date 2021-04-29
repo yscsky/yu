@@ -2,6 +2,7 @@ package yu
 
 import (
 	"sync"
+	"time"
 )
 
 type dealFunc func(interface{})
@@ -12,7 +13,6 @@ type Queue struct {
 	deal dealFunc
 	que  chan interface{}
 	wg   *sync.WaitGroup
-	stop bool
 	stch chan struct{}
 }
 
@@ -23,7 +23,6 @@ func NewQueue(size, num int, deal dealFunc) *Queue {
 		deal: deal,
 		que:  make(chan interface{}, size),
 		wg:   new(sync.WaitGroup),
-		stop: false,
 		stch: make(chan struct{}),
 	}
 }
@@ -43,7 +42,8 @@ func (q *Queue) Start() {
 
 // Stop 停止队列
 func (q *Queue) Stop() {
-	q.tryStop()
+	close(q.stch)
+	time.Sleep(100 * time.Millisecond)
 	close(q.que)
 	q.wg.Wait()
 }
@@ -61,10 +61,10 @@ func (q *Queue) SubmitSync(item interface{}) {
 func (q *Queue) isStop() bool {
 	select {
 	case <-q.stch:
-		q.stop = true
+		return true
 	default:
+		return false
 	}
-	return q.stop
 }
 
 func (q *Queue) submit(i interface{}) {
@@ -72,14 +72,6 @@ func (q *Queue) submit(i interface{}) {
 		return
 	}
 	q.que <- i
-}
-
-func (q *Queue) tryStop() {
-	select {
-	case <-q.que:
-		q.stch <- struct{}{}
-	default:
-	}
 }
 
 // QueueManager 队列管理器
