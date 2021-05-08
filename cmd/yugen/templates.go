@@ -166,7 +166,7 @@ const constgo = `package ml
 const modelgo = `package ml
 `
 
-const dockerfile = `FROM registry.cn-hangzhou.aliyuncs.com/shortlog/go-alpine:1.16.2 as build
+const dockerfile = `FROM registry.cn-hangzhou.aliyuncs.com/shortlog/go-alpine:1.16.4 as build
 
 COPY . /{{.}}/
 
