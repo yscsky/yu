@@ -16,7 +16,7 @@ const mainTemp = `package main
 
 import (
 	"{{.Mod}}/internal/app"
-	ml "{{.Mod}}/internal/model"
+	"{{.Mod}}/internal/config"
 	"github.com/yscsky/yu"
 )
 
@@ -25,25 +25,23 @@ func init() {
 }
 
 func main() {
-	cfg, err := ml.NewConfig("configs/app.toml")
-	if err != nil {
+	if err := config.NewConfig("configs/app.toml"); err != nil {
 		yu.LogErr(err, "NewConfig")
 		return
 	}
-	yu.Run(app.NewApp(cfg))
+	yu.Run(app.NewApp())
 }
 `
 
 const appgo = `package app
 
 import (
+	"{{.Mod}}/internal/config"
 	"{{.Mod}}/internal/db"
-	ml "{{.Mod}}/internal/model"
 	"github.com/yscsky/yu"
 )
 
 var (
-	cfg     *ml.Config
 	ginSvr  *yu.GinServer
 	grpcSvr *yu.GrpcServer
 )
@@ -52,8 +50,7 @@ var (
 type App struct{}
 
 // NewApp 创建App
-func NewApp(c *ml.Config) *App {
-	cfg = c
+func NewApp() *App {
 	return &App{}
 }
 
@@ -70,16 +67,16 @@ func (a *App) Servers() []yu.ServerInterface {
 // OnStart 实现AppInterface接口
 func (a *App) OnStart() bool {
 	// 初始化数据库
-	db.InitDB(cfg.MariaDSN)
+	db.InitDB()
 
 	// 设置gin server
-	ginSvr = yu.NewGinServer(a.Name(), cfg.HttpPort, cfg.GinMod)
+	ginSvr = yu.NewGinServer(a.Name(), config.Cfg.HttpPort, config.Cfg.GinMod)
 	ginSvr.Health()
 	ginSvr.Promethous("admin", "admin")
 	// group := ginSvr.Group("", yu.NoCache(), yu.PromeMetrics(), yu.LogControl(cfg.Trace, []string{}))
 
 	// 设置grpc server
-	grpcSvr = yu.NewGrpcServer(a.Name(), cfg.GrpcPort, func(gs *yu.GrpcServer) {
+	grpcSvr = yu.NewGrpcServer(a.Name(), config.Cfg.GrpcPort, func(gs *yu.GrpcServer) {
 	}, yu.PromeUnaryInterceptor())
 	return true
 }
@@ -93,11 +90,16 @@ func (a *App) OnStop() {
 
 const dbgo = `package db
 
-import "github.com/yscsky/yu"
+import (
+	"{{.Mod}}/internal/config"
+	"github.com/yscsky/yu"
+)
 
 var gdb *yu.GormDB
 
-func InitDB(dsn yu.DSN) {
+// InitDB 初始化数据库
+func InitDB() {
+	dsn := config.Cfg.MariaDSN
 	gdb = yu.MustOpenMySQL(dsn)
 	yu.Logf("mariadb open %s", dsn.MySQL())
 	for _, table := range tables {
@@ -108,6 +110,7 @@ func InitDB(dsn yu.DSN) {
 	}
 }
 
+// CloseDB 关闭数据库
 func CloseDB() {
 	if gdb != nil {
 		gdb.CloseDB()
@@ -119,12 +122,11 @@ const sqlsgo = `package db
 var tables = []string{}
 `
 
-const configgo = `package ml
+const configgo = `package config
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/yscsky/yu"
-	"gorm.io/gorm/logger"
+	"github.com/gin-gonic/gin"
 )
 
 // Config 项目配置
@@ -136,11 +138,14 @@ type Config struct {
 	MariaDSN yu.DSN
 }
 
+// Cfg 全局配置
+var Cfg *Config
+
 // NewConfig 创建项目配置
-func NewConfig(path string) (c *Config, err error) {
-	c = &Config{}
-	err = yu.LoadOrSaveToml(path, c, func() interface{} {
-		c = &Config{
+func NewConfig(path string) (err error) {
+	Cfg = &Config{}
+	err = yu.LoadOrSaveToml(path, Cfg, func() interface{} {
+		Cfg = &Config{
 			GrpcPort: ":8181",
 			HttpPort: ":8080",
 			GinMod:   gin.DebugMode,
@@ -153,10 +158,10 @@ func NewConfig(path string) (c *Config, err error) {
 				DBName:   "dbname",
 				SkipTran: false,
 				PreStmt:  true,
-				LogLevel: logger.Silent,
+				LogLevel: 0,
 			},
 		}
-		return c
+		return Cfg
 	})
 	return
 }
@@ -166,7 +171,7 @@ const constgo = `package ml
 const modelgo = `package ml
 `
 
-const dockerfile = `FROM registry.cn-hangzhou.aliyuncs.com/shortlog/go-alpine:1.16.4 as build
+const dockerfile = `FROM registry.cn-hangzhou.aliyuncs.com/shortlog/go-alpine:1.16.5 as build
 
 COPY . /{{.}}/
 
@@ -174,7 +179,7 @@ WORKDIR /{{.}}
 
 ENV GOPROXY="https://goproxy.cn,direct" GOSUMDB="off"
 
-RUN go build
+RUN go mod tidy && go build
 
 FROM registry.cn-hangzhou.aliyuncs.com/shortlog/alpcn:3.13
 

@@ -73,13 +73,15 @@ func createInternal(mod, pn string) {
 		createTemplateFile("internal/app/app.go", appgo, &args{Mod: mod, Pn: pn})
 	}
 	if err := createDir("internal/db"); err == nil {
-		createTemplateFile("internal/db/db.go", dbgo, nil)
+		createTemplateFile("internal/db/db.go", dbgo, &args{Mod: mod})
 		createTemplateFile("internal/db/sqls.go", sqlsgo, nil)
 	}
 	if err := createDir("internal/model"); err == nil {
-		createTemplateFile("internal/model/config.go", configgo, nil)
 		createTemplateFile("internal/model/const.go", constgo, nil)
 		createTemplateFile("internal/model/model.go", modelgo, nil)
+	}
+	if err := createDir("internal/config"); err == nil {
+		createTemplateFile("internal/config/config.go", configgo, nil)
 	}
 }
 
